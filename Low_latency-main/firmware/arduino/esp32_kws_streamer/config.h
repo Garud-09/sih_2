@@ -9,9 +9,9 @@
 // 1. NETWORK CREDENTIALS & SERVER ADDRESS
 // =========================================================================
 // Replace these with your local Wi-Fi router credentials and host server IP
-#define WIFI_SSID           "IDEA-LAB"
-#define WIFI_PASSWORD        "idealab@100"
-#define SERVER_HOST         "172.17.7.1"   // IP of laptop running asr_server.py
+#define WIFI_SSID           "Jeevan"
+#define WIFI_PASSWORD        "PASSWORD"
+#define SERVER_HOST         "10.118.168.1"   // IP of laptop running asr_server.py
 #define SERVER_PORT         8765       // WebSocket port
 #define SERVER_PATH         "/ws/audio"
 
