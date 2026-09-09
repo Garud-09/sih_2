@@ -1,0 +1,21 @@
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Excluded documentation (per user request)
+brain.md
+prd.md
+

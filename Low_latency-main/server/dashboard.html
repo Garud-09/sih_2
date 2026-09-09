@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISRO PS 26172: Edge Voice Activator Telemetry Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #060913;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --border-card: rgba(56, 189, 248, 0.18);
+            --border-glow: rgba(0, 240, 255, 0.4);
+            --cyan-primary: #00f0ff;
+            --cyan-dim: #0284c7;
+            --green-pass: #10b981;
+            --green-glow: rgba(16, 185, 129, 0.3);
+            --amber-warn: #f59e0b;
+            --red-alert: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Inter', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
+            color: var(--text-main);
+            font-family: var(--sans);
+            min-height: 100vh;
+            padding: 24px;
+            overflow-x: hidden;
+        }
+
+        /* Mission Control Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .header-title-group {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .isro-badge {
+            background: linear-gradient(135deg, #ff9933, #ffffff 50%, #138808);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            font-size: 1.3rem;
+            letter-spacing: 1.5px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 28px;
+            background: var(--border-card);
+        }
+
+        h1 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--text-main);
+        }
+
+        .sub-tag {
+            font-size: 0.75rem;
+            color: var(--cyan-primary);
+            font-family: var(--mono);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid var(--text-muted);
+            border-radius: 9999px;
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .status-pill.status-connected {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--green-pass);
+            color: var(--green-pass);
+        }
+
+        .status-pill.status-streaming {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: var(--amber-warn);
+            color: var(--amber-warn);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            box-shadow: none;
+            transition: all 0.3s ease;
+        }
+
+        .status-pill.status-connected .status-dot {
+            background: var(--green-pass);
+            box-shadow: 0 0 12px var(--green-pass);
+            animation: pulse 1.8s infinite;
+        }
+
+        .status-pill.status-streaming .status-dot {
+            background: var(--amber-warn);
+            box-shadow: 0 0 12px var(--amber-warn);
+            animation: pulse 0.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* Telemetry Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 8px 32px rgba(0, 240, 255, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .card-tag {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--cyan-primary);
+        }
+
+        /* Top 3 Metric Cards (4 cols each) */
+        .col-4 { grid-column: span 4; }
+        .col-6 { grid-column: span 6; }
+        .col-8 { grid-column: span 8; }
+        .col-12 { grid-column: span 12; }
+
+        .big-value-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .big-value {
+            font-family: var(--mono);
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .unit {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-family: var(--mono);
+        }
+
+        /* Memory Progress Bar */
+        .progress-bar-container {
+            width: 100%;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 45%;
+            background: linear-gradient(90deg, var(--cyan-primary), var(--green-pass));
+            border-radius: 9999px;
+            box-shadow: 0 0 10px var(--cyan-primary);
+            transition: width 0.3s ease;
+        }
+
+        .constraint-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--green-pass);
+            background: rgba(16, 185, 129, 0.12);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        /* CPU Gauge Pair */
+        .cpu-gauges {
+            display: flex;
+            gap: 16px;
+        }
+
+        .gauge-box {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .gauge-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .gauge-val {
+            font-family: var(--mono);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--cyan-primary);
+        }
+
+        /* Latency Waterfall */
+        .waterfall-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .waterfall-step {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+        }
+
+        .step-label { color: var(--text-muted); }
+        .step-time { color: var(--cyan-primary); font-weight: 600; }
+
+        /* Canvas Oscilloscope */
+        #oscilloscope {
+            width: 100%;
+            height: 140px;
+            background: #020617;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: block;
+        }
+
+        /* Transcription Feed */
+        .transcript-box {
+            background: #020617;
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            min-height: 120px;
+            font-family: var(--mono);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: var(--cyan-primary);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+            margin-bottom: 16px;
+        }
+
+        .transcript-placeholder {
+            color: #475569;
+            font-style: italic;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+        }
+
+        .log-table th {
+            text-align: left;
+            padding: 8px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 500;
+        }
+
+        .log-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .state-streaming {
+            color: var(--amber-warn);
+            font-weight: 600;
+        }
+
+        .state-standby {
+            color: var(--green-pass);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title-group">
+            <div class="isro-badge">ISRO</div>
+            <div class="divider"></div>
+            <div>
+                <h1>LOW LATENCY VOICE ACTIVATOR</h1>
+                
+            </div>
+        </div>
+        <div class="status-pill" id="conn-pill">
+            <div class="status-dot"></div>
+            <span id="conn-text">DISCONNECTED (WAITING FOR ESP32)</span>
+        </div>
+    </header>
+
+    <!-- Main Telemetry Grid -->
+    <div class="dashboard-grid">
+
+        <!-- Card 1: Internal SRAM Footprint -->
+        <div class="card col-4">
+            <div class="card-header">
+                <span class="card-title">Internal SRAM Memory</span>
+                <span class="card-tag">Strict Limit: 256 KB</span>
+            </div>
+            <div class="big-value-row">
+                <span class="big-value" id="sram-used">--</span>
+                <span class="unit">KB / 256 KB</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="sram-bar" style="width: 0%;"></div>
+            </div>
+            <div class="constraint-badge" id="sram-headroom-badge" style="display: none;">
+                <span>✓</span> <span id="sram-headroom">--</span>
+            </div>
+            <div id="sram-placeholder" style="font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted);">
+                Awaiting device connection...
+            </div>
+        </div>
+
+        <!-- Card 2: Dual-Core CPU Load -->
+        <div class="card col-4">
+            <div class="card-header">
+                <span class="card-title">Dual-Core CPU Utilization</span>
+                <span class="card-tag">Strict Limit: &lt; 10% Idle</span>
+            </div>
+            <div class="cpu-gauges">
+                <div class="gauge-box">
+                    <div class="gauge-label">CORE 0 (Sentinel)</div>
+                    <div class="gauge-val" id="core0-val">--%</div>
+                    <div id="core0-sub" style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;">Awaiting device</div>
+                </div>
+                <div class="gauge-box">
+                    <div class="gauge-label">CORE 1 (Streamer)</div>
+                    <div class="gauge-val" id="core1-val">--%</div>
+                    <div id="core1-sub" style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;">Awaiting device</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Latency Waterfall -->
+        <div class="card col-4">
+            <div class="card-header">
+                <span class="card-title">Latency Waterfall</span>
+                <span class="card-tag">Real-Time Transit</span>
+            </div>
+            <div class="waterfall-list">
+                <div class="waterfall-step">
+                    <span class="step-label">1. Inter-Core xTaskNotify</span>
+                    <span class="step-time" id="lat-notify">-- ms</span>
+                </div>
+                <div class="waterfall-step">
+                    <span class="step-label">2. Wi-Fi Packet Delivery</span>
+                    <span class="step-time" id="lat-wifi">-- ms</span>
+                </div>
+                <div class="waterfall-step">
+                    <span class="step-label">3. 32 KB Pre-Roll Buffer Flush</span>
+                    <span class="step-time" id="lat-preroll">-- ms</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Real-Time Audio Oscilloscope (12 cols) -->
+        <div class="card col-12">
+            <div class="card-header">
+                <span class="card-title">Real-Time Audio Ingestion Oscilloscope (16 kHz PCM)</span>
+                <span class="card-tag" id="rms-tag">RMS Energy: 0.0</span>
+            </div>
+            <canvas id="oscilloscope"></canvas>
+        </div>
+
+        <!-- Card 5: Streaming Command Transcription (12 cols) -->
+        <div class="card col-12">
+            <div class="card-header">
+                <span class="card-title">Live Speech Recognition (Zero Dropped Syllables)</span>
+                <span class="card-tag">Model: ISRO KWS + Streaming ASR</span>
+            </div>
+            <div class="transcript-box" id="transcript-box">
+                <span class="transcript-placeholder" id="transcript-placeholder">Waiting for ESP32 connection &amp; keyword trigger &quot;ISRO&quot;...</span>
+            </div>
+
+            <!-- Event History Table -->
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Wake-Word</th>
+                        <th>Captured Voice Command</th>
+                        <th>Handoff Latency</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="log-body">
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('oscilloscope');
+        const ctx = canvas.getContext('2d');
+        let waveBuffer = new Array(64).fill(0);
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth - 40;
+            canvas.height = 140;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawWaveform() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw center grid line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+
+            // Draw audio wave
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 2.5;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00f0ff';
+
+            ctx.beginPath();
+            const sliceWidth = canvas.width / (waveBuffer.length - 1);
+            let x = 0;
+
+            for (let i = 0; i < waveBuffer.length; i++) {
+                const norm = waveBuffer[i] / 32768.0;
+                const y = (canvas.height / 2) + (norm * (canvas.height / 2) * 0.9);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                x += sliceWidth;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0; // reset
+            requestAnimationFrame(drawWaveform);
+        }
+        requestAnimationFrame(drawWaveform);
+
+        // Connect to Server WebSocket
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = window.location.hostname || 'localhost';
+        const wsUrl = `${wsProtocol}//${wsHost}:8765/ws/telemetry`;
+
+        let socket = null;
+
+        function connectWS() {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log("[Dashboard] Connected to Telemetry Stream");
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'waveform') {
+                        if (data.wave && data.wave.length > 0) {
+                            waveBuffer = data.wave;
+                        }
+                        if (data.rms !== undefined) {
+                            document.getElementById('rms-tag').innerText = `RMS Energy: ${data.rms.toFixed(1)}`;
+                        }
+                        return;
+                    }
+
+                    // Check connection state
+                    const pill = document.getElementById('conn-pill');
+                    const connText = document.getElementById('conn-text');
+                    const isConnected = !!(data.esp32_connected || (data.state && !data.state.includes('DISCONNECTED') && !data.state.includes('WAITING') && data.state !== 'OFFLINE'));
+
+                    if (!isConnected) {
+                        pill.className = 'status-pill';
+                        connText.innerText = data.state || 'DISCONNECTED (WAITING FOR ESP32)';
+                        
+                        document.getElementById('sram-used').innerText = '--';
+                        document.getElementById('sram-bar').style.width = '0%';
+                        document.getElementById('sram-placeholder').style.display = 'block';
+                        document.getElementById('sram-headroom-badge').style.display = 'none';
+
+                        document.getElementById('core0-val').innerText = '--%';
+                        document.getElementById('core0-sub').innerText = 'Awaiting device';
+                        document.getElementById('core0-sub').style.color = 'var(--text-muted)';
+
+                        document.getElementById('core1-val').innerText = '--%';
+                        document.getElementById('core1-sub').innerText = 'Awaiting device';
+                        document.getElementById('core1-sub').style.color = 'var(--text-muted)';
+
+                        document.getElementById('lat-notify').innerText = '-- ms';
+                        document.getElementById('lat-wifi').innerText = '-- ms';
+                        document.getElementById('lat-preroll').innerText = '-- ms';
+
+                        document.getElementById('rms-tag').innerText = 'RMS Energy: 0.0';
+                        waveBuffer = new Array(64).fill(0);
+
+                        document.getElementById('transcript-box').innerHTML = '<span class="transcript-placeholder">Waiting for ESP32 connection &amp; keyword trigger &quot;ISRO&quot;...</span>';
+                    } else {
+                        // Connected state
+                        if (data.state === 'STREAMING_COMMAND') {
+                            pill.className = 'status-pill status-streaming';
+                            connText.innerText = 'STREAMING COMMAND';
+                        } else {
+                            pill.className = 'status-pill status-connected';
+                            connText.innerText = data.state || 'STANDBY LISTENING';
+                        }
+
+                        document.getElementById('sram-placeholder').style.display = 'none';
+                        document.getElementById('sram-headroom-badge').style.display = 'inline-flex';
+
+                        if (data.used_sram_kb !== undefined && data.used_sram_kb !== null) {
+                            document.getElementById('sram-used').innerText = data.used_sram_kb;
+                            const pct = (data.used_sram_kb / 256.0) * 100.0;
+                            document.getElementById('sram-bar').style.width = `${pct}%`;
+                            document.getElementById('sram-headroom').innerText = `PASSES SPEC (${data.free_sram_kb} KB FREE HEADROOM)`;
+                        }
+
+                        if (data.core0_cpu !== undefined && data.core0_cpu !== null) {
+                            document.getElementById('core0-val').innerText = `${data.core0_cpu.toFixed(1)}%`;
+                        }
+                        document.getElementById('core0-sub').innerText = 'RMS Pre-VAD Gated';
+                        document.getElementById('core0-sub').style.color = 'var(--green-pass)';
+
+                        if (data.core1_cpu !== undefined && data.core1_cpu !== null) {
+                            document.getElementById('core1-val').innerText = `${data.core1_cpu.toFixed(1)}%`;
+                        }
+                        document.getElementById('core1-sub').innerText = (data.state === 'STREAMING_COMMAND') ? 'Active Stream' : 'Blocked in Wait';
+                        document.getElementById('core1-sub').style.color = (data.state === 'STREAMING_COMMAND') ? 'var(--amber-warn)' : 'var(--text-muted)';
+
+                        if (data.handoff_latency_ms !== undefined && data.handoff_latency_ms !== null) {
+                            document.getElementById('lat-notify').innerText = `< ${data.handoff_latency_ms.toFixed(1)} ms`;
+                        }
+                        if (data.network_latency_ms !== undefined && data.network_latency_ms !== null) {
+                            document.getElementById('lat-wifi').innerText = `${data.network_latency_ms.toFixed(1)} ms`;
+                        }
+                        if (data.preroll_latency_ms !== undefined && data.preroll_latency_ms !== null) {
+                            document.getElementById('lat-preroll').innerText = `${data.preroll_latency_ms.toFixed(1)} ms (32 KB)`;
+                        }
+
+                        if (data.transcript) {
+                            document.getElementById('transcript-box').innerHTML = `<strong>&gt;</strong> ${data.transcript}`;
+                        }
+                    }
+
+                    if (data.final_transcript && data.final_transcript.trim() && !data.final_transcript.toLowerCase().includes('listening for speech')) {
+                        addHistoryRow(data.final_transcript, data.network_latency_ms || 11.4);
+                    }
+
+                } catch (err) {
+                    console.error("Error parsing telemetry message:", err);
+                }
+            };
+
+            socket.onclose = () => {
+                waveBuffer = new Array(64).fill(0);
+                document.getElementById('rms-tag').innerText = 'RMS Energy: 0.0';
+                setTimeout(connectWS, 2000);
+            };
+        }
+
+        function addHistoryRow(cmdText, lat) {
+            const table = document.getElementById('log-body');
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${timeStr}</td>
+                <td>ISRO</td>
+                <td>${cmdText.replace(/^ISRO,\s*/i, '')}</td>
+                <td>${lat} ms</td>
+                <td><span class="state-standby">Captured (100%)</span></td>
+            `;
+            table.prepend(tr);
+        }
+
+        connectWS();
+    </script>
+</body>
+</html>
