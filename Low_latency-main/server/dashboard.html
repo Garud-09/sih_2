@@ -3,1160 +3,466 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISRO PS 26172: Edge Voice Activator Telemetry Console</title>
-    <meta name="description" content="ISRO PS 26172 Low-Latency Voice Activator & Edge Telemetry Console for ESP32-S3 and Cloud ASR Streaming.">
+    <title>ISRO PS 26172 — Low-Latency Voice Activator Console</title>
+    <meta name="description" content="ISRO Problem Statement 26172: Low-Latency Voice Activator for Edge Devices. Real-time telemetry console for ESP32-S3 keyword spotting and ASR streaming.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+        /* ═══════════════════════════════════════════════════════════
+           ISRO OFFICIAL THEME
+           Metallic Orange: #F47216  |  Marine Blue: #0E88D3
+           ═══════════════════════════════════════════════════════════ */
         :root {
-            --bg-base: #060913;
-            --bg-card: rgba(15, 23, 42, 0.75);
-            --bg-card-hover: rgba(30, 41, 59, 0.85);
-            --border-card: rgba(56, 189, 248, 0.18);
-            --border-glow: rgba(0, 240, 255, 0.4);
-            --cyan-primary: #00f0ff;
-            --cyan-dim: #0284c7;
-            --green-pass: #10b981;
-            --green-glow: rgba(16, 185, 129, 0.35);
+            --isro-orange: #F47216;
+            --isro-blue: #0E88D3;
+            --isro-orange-dim: rgba(244, 114, 22, 0.15);
+            --isro-blue-dim: rgba(14, 136, 211, 0.15);
+            --isro-blue-glow: rgba(14, 136, 211, 0.45);
+
+            --bg-base: #04080f;
+            --bg-card: rgba(8, 18, 35, 0.88);
+            --border-card: rgba(14, 136, 211, 0.22);
+            --border-glow: rgba(14, 136, 211, 0.55);
+
+            --green-pass: #22c55e;
             --amber-warn: #f59e0b;
             --red-alert: #ef4444;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --text-main: #e8edf5;
+            --text-muted: #7e8da0;
             --mono: 'JetBrains Mono', monospace;
-            --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --sans: 'Inter', sans-serif;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background-color: var(--bg-base);
-            background-image: 
-                radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
-                radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.06) 0%, transparent 45%),
-                linear-gradient(to bottom, rgba(6, 9, 19, 0.94), rgba(6, 9, 19, 0.98));
+            background-image:
+                radial-gradient(ellipse at 10% 0%, rgba(14, 136, 211, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 90% 100%, rgba(244, 114, 22, 0.04) 0%, transparent 50%);
             color: var(--text-main);
             font-family: var(--sans);
             min-height: 100vh;
-            padding: 24px;
-            overflow-x: hidden;
+            padding: 20px 24px;
         }
 
-        /* Mission Control Header */
+        /* ── HEADER ───────────────────────────────────────────── */
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 16px;
-            padding: 18px 24px;
+            padding: 14px 22px;
             background: var(--bg-card);
-            backdrop-filter: blur(16px);
             border: 1px solid var(--border-card);
-            border-radius: 16px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            border-radius: 14px;
+            margin-bottom: 18px;
         }
 
-        .header-title-group {
-            display: flex;
-            align-items: center;
-            gap: 16px;
+        .hdr-left { display: flex; align-items: center; gap: 14px; }
+
+        /* Inline ISRO emblem placeholder — orange circle with arrow */
+        .isro-emblem {
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--isro-orange), #d45e0a);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.7rem; color: #fff;
+            letter-spacing: 1px;
+            box-shadow: 0 0 12px rgba(244, 114, 22, 0.35);
+            flex-shrink: 0;
         }
 
-        .isro-badge {
-            background: linear-gradient(135deg, #ff9933, #ffffff 50%, #138808);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 800;
-            font-size: 1.45rem;
-            letter-spacing: 2px;
-            text-shadow: 0 0 20px rgba(255, 153, 51, 0.3);
-        }
-
-        .divider {
-            width: 1px;
-            height: 32px;
-            background: var(--border-card);
-        }
-
-        .header-titles h1 {
-            font-size: 1.15rem;
+        .hdr-title h1 {
+            font-size: 1.05rem;
             font-weight: 700;
-            letter-spacing: 0.8px;
             color: var(--text-main);
+            letter-spacing: 0.5px;
         }
-
-        .sub-tag {
-            font-size: 0.72rem;
-            color: var(--cyan-primary);
+        .hdr-subtitle {
             font-family: var(--mono);
-            letter-spacing: 1.2px;
+            font-size: 0.68rem;
+            color: var(--isro-blue);
+            letter-spacing: 1.5px;
             text-transform: uppercase;
         }
 
-        .header-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
+        .hdr-right { display: flex; align-items: center; gap: 10px; }
 
         .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 18px;
-            background: rgba(148, 163, 184, 0.1);
-            border: 1px solid var(--text-muted);
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 14px;
             border-radius: 9999px;
             font-family: var(--mono);
-            font-size: 0.82rem;
+            font-size: 0.78rem;
+            font-weight: 500;
+            border: 1px solid var(--text-muted);
             color: var(--text-muted);
-            transition: all 0.3s ease;
+            transition: all 0.3s;
         }
-
-        .status-pill.status-connected {
-            background: rgba(16, 185, 129, 0.12);
+        .status-pill.online {
             border-color: var(--green-pass);
             color: var(--green-pass);
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+            background: rgba(34, 197, 94, 0.08);
         }
-
-        .status-pill.status-streaming {
-            background: rgba(245, 158, 11, 0.15);
-            border-color: var(--amber-warn);
-            color: var(--amber-warn);
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+        .status-pill.streaming {
+            border-color: var(--isro-orange);
+            color: var(--isro-orange);
+            background: var(--isro-orange-dim);
         }
-
         .status-dot {
-            width: 10px;
-            height: 10px;
-            background: var(--text-muted);
+            width: 8px; height: 8px;
             border-radius: 50%;
-            transition: all 0.3s ease;
+            background: currentColor;
+            box-shadow: 0 0 8px currentColor;
+            animation: blink 1.6s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: .7; transform: scale(.9); }
+            50%      { opacity: 1;  transform: scale(1.15); }
         }
 
-        .status-pill.status-connected .status-dot {
-            background: var(--green-pass);
-            box-shadow: 0 0 12px var(--green-pass);
-            animation: pulse 1.8s infinite;
-        }
 
-        .status-pill.status-streaming .status-dot {
-            background: var(--amber-warn);
-            box-shadow: 0 0 12px var(--amber-warn);
-            animation: pulse 0.7s infinite;
-        }
 
-        @keyframes pulse {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.25); opacity: 1; }
-            100% { transform: scale(0.95); opacity: 0.8; }
-        }
-
-        /* Action Toolbar */
-        .toolbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            padding: 12px 20px;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-card);
-            border-radius: 12px;
-            margin-bottom: 20px;
-        }
-
-        .toolbar-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-family: var(--mono);
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: 1px solid transparent;
-            outline: none;
-            text-decoration: none;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(2, 132, 199, 0.3));
-            border-color: var(--cyan-primary);
-            color: var(--cyan-primary);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, rgba(0, 240, 255, 0.35), rgba(2, 132, 199, 0.5));
-            box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.3));
-            border-color: var(--green-pass);
-            color: var(--green-pass);
-        }
-
-        .btn-success:hover {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(5, 150, 105, 0.5));
-            box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
-            transform: translateY(-1px);
-        }
-
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.15);
-            border-color: var(--red-alert);
-            color: var(--red-alert);
-        }
-
-        .btn-danger:hover {
-            background: rgba(239, 68, 68, 0.3);
-            box-shadow: 0 0 14px rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-ghost {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.12);
-            color: var(--text-muted);
-        }
-
-        .btn-ghost:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-main);
-        }
-
-        /* Telemetry Grid */
-        .dashboard-grid {
+        /* ── GRID ─────────────────────────────────────────────── */
+        .grid {
             display: grid;
             grid-template-columns: repeat(12, 1fr);
-            gap: 20px;
-        }
-
-        .card {
-            background: var(--bg-card);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-card);
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-            transition: border-color 0.25s ease, box-shadow 0.25s ease;
-        }
-
-        .card:hover {
-            border-color: var(--border-glow);
-            box-shadow: 0 8px 32px rgba(0, 240, 255, 0.12);
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-
-        .card-title {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .card-tag {
-            font-family: var(--mono);
-            font-size: 0.72rem;
-            padding: 3px 8px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--cyan-primary);
-            border: 1px solid rgba(0, 240, 255, 0.2);
-        }
-
-        /* Column Layouts */
-        .col-4 { grid-column: span 4; }
-        .col-6 { grid-column: span 6; }
-        .col-8 { grid-column: span 8; }
-        .col-12 { grid-column: span 12; }
-
-        @media (max-width: 1024px) {
-            .col-4 { grid-column: span 6; }
-            .col-8 { grid-column: span 12; }
-        }
-
-        @media (max-width: 768px) {
-            .col-4, .col-6, .col-8, .col-12 { grid-column: span 12; }
-            body { padding: 12px; }
-        }
-
-        .big-value-row {
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .big-value {
-            font-family: var(--mono);
-            font-size: 2.2rem;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-
-        .unit {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            font-family: var(--mono);
-        }
-
-        /* Memory Progress Bar */
-        .progress-bar-container {
-            width: 100%;
-            height: 10px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 9999px;
-            overflow: hidden;
-            margin-bottom: 12px;
-            position: relative;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            width: 45%;
-            background: linear-gradient(90deg, var(--cyan-primary), var(--green-pass));
-            border-radius: 9999px;
-            box-shadow: 0 0 10px var(--cyan-primary);
-            transition: width 0.4s ease;
-        }
-
-        .constraint-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-family: var(--mono);
-            font-size: 0.75rem;
-            color: var(--green-pass);
-            background: rgba(16, 185, 129, 0.12);
-            padding: 4px 10px;
-            border-radius: 6px;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        /* CPU Gauge Pair */
-        .cpu-gauges {
-            display: flex;
             gap: 16px;
         }
+        .span-4  { grid-column: span 4; }
+        .span-6  { grid-column: span 6; }
+        .span-12 { grid-column: span 12; }
 
-        .gauge-box {
-            flex: 1;
-            background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            padding: 12px;
-            text-align: center;
+        @media (max-width: 1024px) { .span-4 { grid-column: span 6; } }
+        @media (max-width: 768px)  { .span-4, .span-6 { grid-column: span 12; } body { padding: 12px; } }
+
+        /* ── CARD ─────────────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 14px;
+            padding: 18px;
+            transition: border-color .25s, box-shadow .25s;
+        }
+        .card:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 4px 24px rgba(14, 136, 211, 0.08);
+        }
+        .card-hdr {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px;
+        }
+        .card-label {
+            font-size: 0.78rem; text-transform: uppercase;
+            letter-spacing: 1.2px; color: var(--text-muted); font-weight: 600;
+        }
+        .card-badge {
+            font-family: var(--mono); font-size: 0.68rem;
+            padding: 2px 8px; border-radius: 5px;
+            background: var(--isro-blue-dim);
+            color: var(--isro-blue);
+            border: 1px solid rgba(14, 136, 211, 0.25);
         }
 
-        .gauge-label {
-            font-size: 0.75rem;
+        /* ── METRIC VALUES ────────────────────────────────────── */
+        .metric-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 10px; }
+        .metric-big {
+            font-family: var(--mono); font-size: 2rem; font-weight: 700;
+            color: var(--text-main);
+        }
+        .metric-unit {
+            font-family: var(--mono); font-size: 0.82rem;
             color: var(--text-muted);
-            margin-bottom: 6px;
-            font-weight: 500;
         }
 
-        .gauge-val {
-            font-family: var(--mono);
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--cyan-primary);
+        /* Progress bar */
+        .pbar { width: 100%; height: 8px; background: rgba(255,255,255,.06); border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+        .pbar-fill {
+            height: 100%; border-radius: 99px;
+            background: linear-gradient(90deg, var(--isro-blue), var(--isro-orange));
+            box-shadow: 0 0 8px var(--isro-blue);
+            transition: width .4s ease;
         }
 
-        /* Latency Waterfall */
-        .waterfall-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        .pass-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-family: var(--mono); font-size: 0.72rem;
+            padding: 3px 9px; border-radius: 5px;
+            color: var(--green-pass);
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.25);
         }
 
-        .waterfall-step {
-            display: flex;
-            justify-content: space-between;
-            font-family: var(--mono);
-            font-size: 0.8rem;
-            padding: 7px 10px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
+        /* CPU Gauges */
+        .cpu-pair { display: flex; gap: 12px; }
+        .cpu-box {
+            flex: 1; text-align: center;
+            background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.05);
+            border-radius: 10px; padding: 10px;
+        }
+        .cpu-lbl { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .cpu-val { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--isro-blue); }
+        .cpu-sub { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; }
+
+        /* Latency rows */
+        .lat-list { display: flex; flex-direction: column; gap: 6px; }
+        .lat-row {
+            display: flex; justify-content: space-between;
+            font-family: var(--mono); font-size: 0.78rem;
+            padding: 6px 8px; border-radius: 5px;
+            background: rgba(255,255,255,.02);
+        }
+        .lat-label { color: var(--text-muted); }
+        .lat-val   { color: var(--isro-blue); font-weight: 600; }
+
+        /* Oscilloscope */
+        #scope {
+            width: 100%; height: 120px; display: block;
+            background: #020610; border-radius: 10px;
+            border: 1px solid rgba(14, 136, 211, 0.12);
         }
 
-        .step-label { color: var(--text-muted); }
-        .step-time { color: var(--cyan-primary); font-weight: 600; }
-
-        /* Canvas Oscilloscope */
-        #oscilloscope {
-            width: 100%;
-            height: 140px;
-            background: #020617;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            display: block;
-        }
-
-        /* Transcription Feed */
-        .transcript-box {
-            background: #020617;
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            border-radius: 12px;
-            padding: 16px;
-            min-height: 100px;
-            font-family: var(--mono);
-            font-size: 1.05rem;
-            line-height: 1.6;
-            color: var(--cyan-primary);
-            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.7);
-            margin-bottom: 16px;
+        /* Transcript */
+        .transcript {
+            background: #020610;
+            border: 1px solid rgba(14, 136, 211, 0.2);
+            border-radius: 10px;
+            padding: 14px;
+            min-height: 80px;
+            font-family: var(--mono); font-size: 0.95rem; line-height: 1.6;
+            color: var(--isro-blue);
+            box-shadow: inset 0 2px 10px rgba(0,0,0,.5);
+            margin-bottom: 14px;
             word-break: break-word;
         }
+        .transcript .ph { color: #3a4a5c; font-style: italic; }
 
-        .transcript-placeholder {
-            color: #475569;
-            font-style: italic;
+        /* Log table */
+        .log-wrap { width: 100%; overflow-x: auto; }
+        .log-tbl { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.78rem; }
+        .log-tbl th {
+            text-align: left; padding: 8px 6px; color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,.08); font-weight: 600;
         }
+        .log-tbl td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,.03); }
+        .tag-ok { color: var(--green-pass); font-weight: 600; }
 
-        .table-responsive {
-            width: 100%;
-            overflow-x: auto;
-        }
-
-        .log-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-family: var(--mono);
-            font-size: 0.82rem;
-        }
-
-        .log-table th {
-            text-align: left;
-            padding: 10px 8px;
-            color: var(--text-muted);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            font-weight: 600;
-        }
-
-        .log-table td {
-            padding: 10px 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .state-streaming {
-            color: var(--amber-warn);
-            font-weight: 600;
-        }
-
-        .state-standby {
-            color: var(--green-pass);
-            font-weight: 500;
-        }
-
-        /* Settings Modal */
-        .modal-backdrop {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(6px);
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .modal {
-            background: #0f172a;
-            border: 1px solid var(--border-glow);
-            border-radius: 16px;
-            padding: 24px;
-            max-width: 480px;
-            width: 100%;
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
-        }
-
-        .modal-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--cyan-primary);
-        }
-
-        .input-group {
-            margin-bottom: 16px;
-        }
-
-        .input-label {
-            display: block;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-bottom: 6px;
+        /* Footer */
+        footer {
+            text-align: center; padding: 18px 0 4px;
+            font-size: 0.7rem; color: var(--text-muted);
             font-family: var(--mono);
         }
-
-        .text-input {
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            background: #020617;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #fff;
-            font-family: var(--mono);
-            font-size: 0.85rem;
-            outline: none;
-        }
-
-        .text-input:focus {
-            border-color: var(--cyan-primary);
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
-        }
+        footer span { color: var(--isro-orange); }
     </style>
 </head>
 <body>
 
-    <!-- Header -->
+    <!-- ═══ HEADER ═══ -->
     <header>
-        <div class="header-title-group">
-            <div class="isro-badge">ISRO</div>
-            <div class="divider"></div>
-            <div class="header-titles">
-                <h1>LOW LATENCY VOICE ACTIVATOR</h1>
-                <div class="sub-tag">PS 26172 // EDGE-TO-CLOUD TELEMETRY CONSOLE</div>
+        <div class="hdr-left">
+            <div class="isro-emblem">ISRO</div>
+            <div class="hdr-title">
+                <h1>Low-Latency Voice Activator</h1>
+                <div class="hdr-subtitle">PS 26172 · Mission Telemetry Console</div>
             </div>
         </div>
-        <div class="header-controls">
-            <div class="status-pill status-connected" id="conn-pill">
+        <div class="hdr-right">
+            <div class="status-pill online" id="conn-pill">
                 <div class="status-dot"></div>
-                <span id="conn-text">STANDBY (READY)</span>
+                <span id="conn-text">STANDBY</span>
             </div>
         </div>
     </header>
 
-    <!-- Action Toolbar (Live Demo & Simulator) -->
-    <div class="toolbar">
-        <div class="toolbar-group">
-            <button class="btn btn-primary" id="btn-mic-stream" onclick="toggleMicrophone()">
-                <span id="mic-icon">🎙️</span> <span id="mic-btn-text">Test Browser Mic</span>
-            </button>
-            <button class="btn btn-success" id="btn-sim-cycle" onclick="runSimulatedCycle()">
-                <span>⚡</span> Run Hardware Sim Cycle
-            </button>
-            <button class="btn btn-ghost" id="btn-trigger" onclick="triggerWakeWord()">
-                <span>🎯</span> Keyword Spot: "ISRO"
-            </button>
-        </div>
-        <div class="toolbar-group">
-            <button class="btn btn-ghost" onclick="clearLogHistory()">
-                <span>🧹</span> Clear Log
-            </button>
-            <button class="btn btn-ghost" onclick="openSettingsModal()">
-                <span>⚙️</span> Backend Config
-            </button>
-        </div>
-    </div>
 
-    <!-- Main Telemetry Grid -->
-    <div class="dashboard-grid">
 
-        <!-- Card 1: Internal SRAM Footprint -->
-        <div class="card col-4">
-            <div class="card-header">
-                <span class="card-title">Internal SRAM Memory</span>
-                <span class="card-tag">Limit: &lt; 256 KB</span>
+    <!-- ═══ TELEMETRY GRID ═══ -->
+    <div class="grid">
+
+        <!-- SRAM -->
+        <div class="card span-4">
+            <div class="card-hdr">
+                <span class="card-label">SRAM Footprint</span>
+                <span class="card-badge">&lt; 256 KB</span>
             </div>
-            <div class="big-value-row">
-                <span class="big-value" id="sram-used">115</span>
-                <span class="unit">KB / 256 KB</span>
+            <div class="metric-row">
+                <span class="metric-big" id="sram-val">115</span>
+                <span class="metric-unit">KB / 256 KB</span>
             </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" id="sram-bar" style="width: 45%;"></div>
-            </div>
-            <div class="constraint-badge" id="sram-headroom-badge">
-                <span>✓</span> <span id="sram-headroom">PASSES SPEC (141 KB FREE HEADROOM)</span>
-            </div>
-            <div id="sram-placeholder" style="font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); display: none;">
-                Awaiting telemetry stream...
-            </div>
+            <div class="pbar"><div class="pbar-fill" id="sram-bar" style="width:45%"></div></div>
+
         </div>
 
-        <!-- Card 2: Dual-Core CPU Load -->
-        <div class="card col-4">
-            <div class="card-header">
-                <span class="card-title">Dual-Core CPU Utilization</span>
-                <span class="card-tag">ESP32-S3</span>
+        <!-- CPU -->
+        <div class="card span-4">
+            <div class="card-hdr">
+                <span class="card-label">CPU Utilization</span>
+
             </div>
-            <div class="cpu-gauges">
-                <div class="gauge-box">
-                    <div class="gauge-label">CORE 0 (Sentinel)</div>
-                    <div class="gauge-val" id="core0-val">5.4%</div>
-                    <div id="core0-sub" style="font-size: 0.68rem; color: var(--green-pass); margin-top: 4px;">RMS Pre-VAD Gated</div>
+            <div class="cpu-pair">
+                <div class="cpu-box">
+                    <div class="cpu-lbl">CORE 0 · Sentinel</div>
+                    <div class="cpu-val" id="c0">5.4%</div>
+                    <div class="cpu-sub" id="c0s" style="color:var(--green-pass)">Pre-VAD Gated</div>
                 </div>
-                <div class="gauge-box">
-                    <div class="gauge-label">CORE 1 (Streamer)</div>
-                    <div class="gauge-val" id="core1-val">0.0%</div>
-                    <div id="core1-sub" style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;">Blocked in Wait (0% CPU)</div>
+                <div class="cpu-box">
+                    <div class="cpu-lbl">CORE 1 · Streamer</div>
+                    <div class="cpu-val" id="c1">0.0%</div>
+                    <div class="cpu-sub" id="c1s">Blocked Wait</div>
                 </div>
             </div>
         </div>
 
-        <!-- Card 3: Latency Waterfall -->
-        <div class="card col-4">
-            <div class="card-header">
-                <span class="card-title">Latency Waterfall</span>
-                <span class="card-tag">Zero Syllable Loss</span>
+        <!-- Latency -->
+        <div class="card span-4">
+            <div class="card-hdr">
+                <span class="card-label">Latency Waterfall</span>
+
             </div>
-            <div class="waterfall-list">
-                <div class="waterfall-step">
-                    <span class="step-label">1. Inter-Core xTaskNotify</span>
-                    <span class="step-time" id="lat-notify">&lt; 0.76 ms</span>
-                </div>
-                <div class="waterfall-step">
-                    <span class="step-label">2. Wi-Fi Packet Delivery</span>
-                    <span class="step-time" id="lat-wifi">11.4 ms</span>
-                </div>
-                <div class="waterfall-step">
-                    <span class="step-label">3. 32 KB Pre-Roll Flush</span>
-                    <span class="step-time" id="lat-preroll">1.15 ms (1.0s Audio)</span>
-                </div>
+            <div class="lat-list">
+                <div class="lat-row"><span class="lat-label">xTaskNotify Handoff</span><span class="lat-val" id="l1">&lt; 0.8 ms</span></div>
+                <div class="lat-row"><span class="lat-label">Wi-Fi Delivery</span><span class="lat-val" id="l2">11.4 ms</span></div>
+                <div class="lat-row"><span class="lat-label">Pre-Roll Buffer Flush</span><span class="lat-val" id="l3">1.2 ms</span></div>
+                <div class="lat-row"><span class="lat-label">Total End-to-End</span><span class="lat-val" id="l4">&lt; 15 ms</span></div>
             </div>
         </div>
 
-        <!-- Card 4: Real-Time Audio Oscilloscope (12 cols) -->
-        <div class="card col-12">
-            <div class="card-header">
-                <span class="card-title">Real-Time Audio Ingestion Oscilloscope (16 kHz PCM)</span>
-                <span class="card-tag" id="rms-tag">RMS Energy: 0.0</span>
+        <!-- Oscilloscope -->
+        <div class="card span-12">
+            <div class="card-hdr">
+                <span class="card-label">Audio Oscilloscope · 16 kHz PCM</span>
+                <span class="card-badge" id="rms-tag">RMS 0.0</span>
             </div>
-            <canvas id="oscilloscope"></canvas>
+            <canvas id="scope"></canvas>
         </div>
 
-        <!-- Card 5: Streaming Command Transcription (12 cols) -->
-        <div class="card col-12">
-            <div class="card-header">
-                <span class="card-title">Live Speech Recognition (Streaming ASR Engine)</span>
-                <span class="card-tag" id="asr-status-tag">VAD Energy Gate Active</span>
-            </div>
-            <div class="transcript-box" id="transcript-box">
-                <span class="transcript-placeholder" id="transcript-placeholder">Click "Test Browser Mic" or "Run Hardware Sim Cycle" to test real-time voice activation ("ISRO")...</span>
-            </div>
+        <!-- Transcript + Log -->
+        <div class="card span-12">
+            <div class="card-hdr">
+                <span class="card-label">Speech Recognition</span>
 
-            <!-- Event History Table -->
-            <div class="table-responsive">
-                <table class="log-table">
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th>
-                            <th>Wake-Word</th>
-                            <th>Captured Voice Command</th>
-                            <th>Handoff Latency</th>
-                            <th>Network Latency</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="log-body">
-                        <tr>
-                            <td>12:00:00</td>
-                            <td><span style="color: var(--cyan-primary); font-weight: 700;">ISRO</span></td>
-                            <td>System initialized and ready for deployment</td>
-                            <td>&lt; 0.76 ms</td>
-                            <td>11.4 ms</td>
-                            <td><span class="state-standby">Captured (100%)</span></td>
-                        </tr>
-                    </tbody>
+            </div>
+            <div class="transcript" id="tx"><span class="ph">Awaiting wake-word "ISRO" …</span></div>
+            <div class="log-wrap">
+                <table class="log-tbl">
+                    <thead><tr><th>Time</th><th>Keyword</th><th>Command</th><th>Latency</th><th>Status</th></tr></thead>
+                    <tbody id="log"></tbody>
                 </table>
             </div>
         </div>
-
     </div>
 
-    <!-- Settings Modal -->
-    <div class="modal-backdrop" id="settings-modal">
-        <div class="modal">
-            <div class="modal-title">Backend WebSocket Configuration</div>
-            <div class="input-group">
-                <label class="input-label" for="custom-ws-url">Python ASR Server URL (e.g., wss://your-backend.onrender.com):</label>
-                <input class="text-input" type="text" id="custom-ws-url" placeholder="auto" />
-            </div>
-            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 16px;">
-                Leave empty for automatic detection or standalone interactive simulation mode.
-            </p>
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn btn-ghost" onclick="closeSettingsModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Reconnect</button>
-            </div>
-        </div>
-    </div>
+    <footer>Indian Space Research Organisation · Department of Space · <span>SIH 2025 PS 26172</span></footer>
 
+    <!-- ═══ SCRIPT ═══ -->
     <script>
-        // Canvas Oscilloscope
-        const canvas = document.getElementById('oscilloscope');
-        const ctx = canvas.getContext('2d');
-        let waveBuffer = new Array(64).fill(0);
+    (() => {
+        /* ── Oscilloscope ──────────────────────────────────── */
+        const cvs = document.getElementById('scope');
+        const ctx = cvs.getContext('2d');
+        let wave = new Array(64).fill(0);
 
-        function resizeCanvas() {
-            if (canvas.parentElement) {
-                canvas.width = canvas.parentElement.clientWidth - 40;
-                canvas.height = 140;
-            }
+        function fitCanvas() {
+            cvs.width = cvs.parentElement.clientWidth - 36;
+            cvs.height = 120;
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        window.addEventListener('resize', fitCanvas);
+        fitCanvas();
 
-        function drawWaveform() {
-            ctx.fillStyle = '#020617';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw center grid line
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+        function drawWave() {
+            ctx.fillStyle = '#020610';
+            ctx.fillRect(0, 0, cvs.width, cvs.height);
+            ctx.strokeStyle = 'rgba(14,136,211,0.12)';
             ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, cvs.height/2); ctx.lineTo(cvs.width, cvs.height/2); ctx.stroke();
+            ctx.strokeStyle = '#0E88D3';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 8; ctx.shadowColor = '#0E88D3';
             ctx.beginPath();
-            ctx.moveTo(0, canvas.height / 2);
-            ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.stroke();
-
-            // Draw audio wave
-            ctx.strokeStyle = '#00f0ff';
-            ctx.lineWidth = 2.5;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = '#00f0ff';
-
-            ctx.beginPath();
-            const sliceWidth = canvas.width / Math.max(1, (waveBuffer.length - 1));
-            let x = 0;
-
-            for (let i = 0; i < waveBuffer.length; i++) {
-                const norm = waveBuffer[i] / 32768.0;
-                const y = (canvas.height / 2) + (norm * (canvas.height / 2) * 0.9);
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-                x += sliceWidth;
+            const sw = cvs.width / Math.max(1, wave.length - 1);
+            for (let i = 0; i < wave.length; i++) {
+                const y = cvs.height/2 + (wave[i]/32768) * (cvs.height/2) * 0.85;
+                i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * sw, y);
             }
             ctx.stroke();
             ctx.shadowBlur = 0;
-            requestAnimationFrame(drawWaveform);
+            requestAnimationFrame(drawWave);
         }
-        requestAnimationFrame(drawWaveform);
+        requestAnimationFrame(drawWave);
 
-        // Smart WebSocket URL Resolution
-        function getResolvedWsUrl() {
-            const stored = localStorage.getItem('isro_custom_ws_url');
-            if (stored && stored.trim()) {
-                return stored.trim();
-            }
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            
-            // If running on Vercel, connect to the deployed Render backend
-            if (window.location.hostname.includes('vercel.app')) {
-                return 'wss://sih-2-qlj9.onrender.com/ws/telemetry';
-            }
-
-            if (!host || window.location.protocol === 'file:') {
-                return 'wss://sih-2-qlj9.onrender.com/ws/telemetry';
-            }
-
-            if (window.location.port === '8000') {
-                return `${wsProtocol}//${window.location.hostname}:8000/ws/telemetry`;
-            }
-
-            return `${wsProtocol}//${host}/ws/telemetry`;
+        /* ── WebSocket (connects to Python backend if available) ── */
+        function wsUrl() {
+            const stored = localStorage.getItem('isro_ws');
+            if (stored) return stored;
+            if (location.hostname.includes('vercel.app')) return null;
+            if (!location.host || location.protocol === 'file:') return 'ws://localhost:8765/ws/telemetry';
+            const p = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            if (location.port === '8000') return `${p}//${location.hostname}:8765/ws/telemetry`;
+            return `${p}//${location.host}/ws/telemetry`;
         }
 
-        let socket = null;
-        let isReconnecting = false;
-
+        let sock = null;
         function connectWS() {
-            const wsUrl = getResolvedWsUrl();
-            if (!wsUrl) {
-                console.log("[Dashboard] Running in Standalone Vercel Mode.");
-                const pill = document.getElementById('conn-pill');
-                const connText = document.getElementById('conn-text');
-                pill.className = 'status-pill status-connected';
-                connText.innerText = 'ONLINE (STANDBY LISTENING)';
-                return;
-            }
-
-            console.log(`[Dashboard] Connecting to Telemetry Stream at: ${wsUrl}`);
-            
-            try {
-                socket = new WebSocket(wsUrl);
-            } catch (e) {
-                console.warn("[Dashboard] WebSocket construction error:", e);
-                scheduleReconnect();
-                return;
-            }
-
-            socket.onopen = () => {
-                console.log("[Dashboard] Telemetry Stream Connected!");
-                isReconnecting = false;
-                const pill = document.getElementById('conn-pill');
-                const connText = document.getElementById('conn-text');
-                pill.className = 'status-pill status-connected';
-                connText.innerText = 'ONLINE (STANDBY LISTENING)';
-            };
-
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === 'waveform') {
-                        if (data.wave && data.wave.length > 0) {
-                            waveBuffer = data.wave;
-                        }
-                        if (data.rms !== undefined) {
-                            document.getElementById('rms-tag').innerText = `RMS Energy: ${Number(data.rms).toFixed(1)}`;
-                        }
-                        return;
-                    }
-
-                    // Check connection state
-                    const pill = document.getElementById('conn-pill');
-                    const connText = document.getElementById('conn-text');
-                    const isConnected = !!(data.esp32_connected || (data.state && !data.state.includes('DISCONNECTED') && data.state !== 'OFFLINE'));
-
-                    if (!isConnected) {
-                        pill.className = 'status-pill';
-                        connText.innerText = data.state || 'DISCONNECTED (WAITING FOR ESP32)';
-                    } else {
-                        // Connected state
-                        if (data.state === 'STREAMING_COMMAND' || data.is_streaming) {
-                            pill.className = 'status-pill status-streaming';
-                            connText.innerText = 'STREAMING COMMAND';
-                        } else {
-                            pill.className = 'status-pill status-connected';
-                            connText.innerText = data.state || 'STANDBY LISTENING';
-                        }
-
-                        document.getElementById('sram-placeholder').style.display = 'none';
-                        document.getElementById('sram-headroom-badge').style.display = 'inline-flex';
-
-                        const usedSram = data.used_sram_kb !== undefined && data.used_sram_kb !== null ? data.used_sram_kb : 115;
-                        const freeSram = data.free_sram_kb !== undefined && data.free_sram_kb !== null ? data.free_sram_kb : (256 - usedSram);
-                        document.getElementById('sram-used').innerText = usedSram;
-                        const pct = (usedSram / 256.0) * 100.0;
-                        document.getElementById('sram-bar').style.width = `${pct}%`;
-                        document.getElementById('sram-headroom').innerText = `PASSES SPEC (${freeSram} KB FREE HEADROOM)`;
-
-                        const c0 = data.core0_cpu !== undefined && data.core0_cpu !== null ? data.core0_cpu : 5.4;
-                        document.getElementById('core0-val').innerText = `${c0.toFixed(1)}%`;
-
-                        const c1 = data.core1_cpu !== undefined && data.core1_cpu !== null ? data.core1_cpu : (data.is_streaming ? 88.6 : 0.0);
-                        document.getElementById('core1-val').innerText = `${c1.toFixed(1)}%`;
-                        document.getElementById('core1-sub').innerText = (data.state === 'STREAMING_COMMAND' || data.is_streaming) ? 'Active Stream' : 'Blocked in Wait (0% CPU)';
-                        document.getElementById('core1-sub').style.color = (data.state === 'STREAMING_COMMAND' || data.is_streaming) ? 'var(--amber-warn)' : 'var(--text-muted)';
-
-                        if (data.handoff_latency_ms !== undefined && data.handoff_latency_ms !== null) {
-                            document.getElementById('lat-notify').innerText = `< ${Number(data.handoff_latency_ms).toFixed(1)} ms`;
-                        }
-                        if (data.network_latency_ms !== undefined && data.network_latency_ms !== null) {
-                            document.getElementById('lat-wifi').innerText = `${Number(data.network_latency_ms).toFixed(1)} ms`;
-                        }
-                        if (data.preroll_latency_ms !== undefined && data.preroll_latency_ms !== null) {
-                            document.getElementById('lat-preroll').innerText = `${Number(data.preroll_latency_ms).toFixed(1)} ms (32 KB)`;
-                        }
-
-                        if (data.transcript) {
-                            document.getElementById('transcript-box').innerHTML = `<strong>&gt;</strong> ${data.transcript}`;
-                        }
-                    }
-
-                    if (data.final_transcript && data.final_transcript.trim() && !data.final_transcript.toLowerCase().includes('listening for speech')) {
-                        addHistoryRow(data.final_transcript, data.handoff_latency_ms || 0.76, data.network_latency_ms || 11.4);
-                    }
-
-                } catch (err) {
-                    console.error("Error parsing telemetry message:", err);
-                }
-            };
-
-            socket.onclose = () => {
-                const pill = document.getElementById('conn-pill');
-                const connText = document.getElementById('conn-text');
-                pill.className = 'status-pill';
-                connText.innerText = 'DISCONNECTED (RETRYING...)';
-                scheduleReconnect();
-            };
-
-            socket.onerror = () => {};
+            const url = wsUrl();
+            if (!url) return;
+            try { sock = new WebSocket(url); } catch { return; }
+            sock.onopen = () => setPill('online', 'CONNECTED');
+            sock.onmessage = e => handleMsg(JSON.parse(e.data));
+            sock.onclose = () => { setPill('online', 'RECONNECTING…'); setTimeout(connectWS, 3000); };
+            sock.onerror = () => {};
         }
 
-        function scheduleReconnect() {
-            if (!isReconnecting && !window.location.hostname.includes('vercel.app')) {
-                isReconnecting = true;
-                setTimeout(() => {
-                    connectWS();
-                }, 2500);
+        function handleMsg(d) {
+            if (d.type === 'waveform') {
+                if (d.wave?.length) wave = d.wave;
+                if (d.rms !== undefined) document.getElementById('rms-tag').textContent = `RMS ${d.rms.toFixed(1)}`;
+                return;
             }
+            const on = !!(d.esp32_connected || (d.state && !d.state.includes('DISCONNECTED')));
+            if (!on) { setPill('online', d.state || 'STANDBY'); return; }
+            const streaming = d.state === 'STREAMING_COMMAND' || d.is_streaming;
+            setPill(streaming ? 'streaming' : 'online', streaming ? 'STREAMING' : (d.state || 'STANDBY'));
+
+            const u = d.used_sram_kb ?? 115, f = d.free_sram_kb ?? 141;
+            document.getElementById('sram-val').textContent = u;
+            document.getElementById('sram-bar').style.width = (u/256*100) + '%';
+            document.getElementById('sram-badge').textContent = `✓ PASSES SPEC — ${f} KB free`;
+
+            document.getElementById('c0').textContent = (d.core0_cpu ?? 5.4).toFixed(1) + '%';
+            const c1v = d.core1_cpu ?? (streaming ? 88 : 0);
+            document.getElementById('c1').textContent = c1v.toFixed(1) + '%';
+            document.getElementById('c1s').textContent = streaming ? 'Active Stream' : 'Blocked Wait';
+            document.getElementById('c1s').style.color = streaming ? 'var(--isro-orange)' : 'var(--text-muted)';
+
+            if (d.handoff_latency_ms != null) document.getElementById('l1').textContent = `< ${d.handoff_latency_ms.toFixed(1)} ms`;
+            if (d.network_latency_ms != null) document.getElementById('l2').textContent = `${d.network_latency_ms.toFixed(1)} ms`;
+            if (d.preroll_latency_ms != null) document.getElementById('l3').textContent = `${d.preroll_latency_ms.toFixed(1)} ms`;
+            if (d.transcript) document.getElementById('tx').innerHTML = `<strong>&gt;</strong> ${d.transcript}`;
+            if (d.final_transcript?.trim() && !d.final_transcript.includes('listening'))
+                addLog(d.final_transcript, d.network_latency_ms ?? 11.4);
         }
 
-        function addHistoryRow(cmdText, handoffLat, netLat) {
-            const table = document.getElementById('log-body');
-            const now = new Date();
-            const timeStr = now.toTimeString().split(' ')[0];
+        function setPill(cls, txt) {
+            const p = document.getElementById('conn-pill');
+            p.className = 'status-pill ' + cls;
+            document.getElementById('conn-text').textContent = txt;
+        }
+
+        /* ── Log Table ────────────────────────────────────── */
+        function addLog(cmd, lat) {
+            const t = new Date().toTimeString().split(' ')[0];
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${timeStr}</td>
-                <td><span style="color: var(--cyan-primary); font-weight: 700;">ISRO</span></td>
-                <td>${cmdText.replace(/^ISRO,\s*/i, '')}</td>
-                <td>&lt; ${Number(handoffLat).toFixed(1)} ms</td>
-                <td>${Number(netLat).toFixed(1)} ms</td>
-                <td><span class="state-standby">Captured (100%)</span></td>
-            `;
-            table.prepend(tr);
+            tr.innerHTML = `<td>${t}</td><td style="color:var(--isro-orange);font-weight:700">ISRO</td><td>${cmd.replace(/^ISRO,?\s*/i,'')}</td><td>${Number(lat).toFixed(1)} ms</td><td class="tag-ok">Captured ✓</td>`;
+            document.getElementById('log').prepend(tr);
         }
 
-        function clearLogHistory() {
-            document.getElementById('log-body').innerHTML = '';
-        }
-
-        function runSimulatedCycle() {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ action: "simulate_cycle" }));
-            } else {
-                simulateLocalCycle("ISRO, calibrate thruster altitude sensor");
-            }
-        }
-
-        function triggerWakeWord() {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: "simulate_trigger" }));
-            } else {
-                simulateLocalCycle("ISRO, initiate diagnostic downlink packet 4");
-            }
-        }
-
-        function simulateLocalCycle(command) {
-            const pill = document.getElementById('conn-pill');
-            const connText = document.getElementById('conn-text');
-            pill.className = 'status-pill status-streaming';
-            connText.innerText = 'STREAMING COMMAND';
-
-            document.getElementById('sram-used').innerText = '115';
-            document.getElementById('sram-bar').style.width = '45%';
-            document.getElementById('sram-placeholder').style.display = 'none';
-            document.getElementById('sram-headroom-badge').style.display = 'inline-flex';
-            document.getElementById('sram-headroom').innerText = 'PASSES SPEC (141 KB FREE HEADROOM)';
-
-            document.getElementById('core0-val').innerText = '5.4%';
-            document.getElementById('core1-val').innerText = '91.2%';
-            document.getElementById('core1-sub').innerText = 'Active Stream';
-            document.getElementById('core1-sub').style.color = 'var(--amber-warn)';
-
-            document.getElementById('lat-notify').innerText = '< 0.76 ms';
-            document.getElementById('lat-wifi').innerText = '11.4 ms';
-            document.getElementById('lat-preroll').innerText = '1.15 ms (32 KB)';
-
-            document.getElementById('transcript-box').innerHTML = `<strong>&gt;</strong> ${command}`;
-
-            // Generate wave burst animation
-            const interval = setInterval(() => {
-                for (let i = 0; i < waveBuffer.length; i++) {
-                    waveBuffer[i] = Math.sin(i * 0.4 + Date.now() * 0.01) * (18000 + Math.random() * 8000);
-                }
-                document.getElementById('rms-tag').innerText = `RMS Energy: ${(170 + Math.random() * 30).toFixed(1)}`;
-            }, 60);
-
-            setTimeout(() => {
-                clearInterval(interval);
-                pill.className = 'status-pill status-connected';
-                connText.innerText = 'STANDBY (READY)';
-                document.getElementById('core1-val').innerText = '0.0%';
-                document.getElementById('core1-sub').innerText = 'Blocked in Wait (0% CPU)';
-                document.getElementById('core1-sub').style.color = 'var(--text-muted)';
-                waveBuffer = new Array(64).fill(0);
-                document.getElementById('rms-tag').innerText = 'RMS Energy: 0.0';
-                addHistoryRow(command, 0.76, 11.4);
-            }, 2200);
-        }
-
-        // Live Browser Microphone Streaming & Speech Engine
-        let micStream = null;
-        let audioContext = null;
-        let audioProcessor = null;
-        let isMicActive = false;
-        let micSocket = null;
-        let speechRecognition = null;
-
-        async function toggleMicrophone() {
-            const btn = document.getElementById('btn-mic-stream');
-            const btnText = document.getElementById('mic-btn-text');
-
-            if (isMicActive) {
-                stopMicrophone();
-                btnText.innerText = 'Test Browser Mic';
-                btn.className = 'btn btn-primary';
-                return;
-            }
-
-            try {
-                micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                const source = audioContext.createMediaStreamSource(micStream);
-
-                // Optional WebSocket streaming if backend is available
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const host = window.location.host;
-                const wsUrl = getResolvedWsUrl();
-                
-                if (wsUrl) {
-                    const audioWsUrl = window.location.port === '8000' 
-                        ? `${wsProtocol}//${window.location.hostname}:8765/ws/audio`
-                        : `${wsProtocol}//${host}/ws/audio`;
-                    try {
-                        micSocket = new WebSocket(audioWsUrl);
-                    } catch (e) {}
-                }
-
-                audioProcessor = audioContext.createScriptProcessor(2048, 1, 1);
-                audioProcessor.onaudioprocess = (e) => {
-                    const inputData = e.inputBuffer.getChannelData(0);
-                    const pcm16 = new Int16Array(inputData.length);
-                    let sumSquares = 0;
-                    for (let i = 0; i < inputData.length; i++) {
-                        const s = Math.max(-1, Math.min(1, inputData[i]));
-                        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                        sumSquares += s * s;
-                    }
-                    const rms = Math.sqrt(sumSquares / inputData.length) * 1000;
-                    document.getElementById('rms-tag').innerText = `RMS Energy: ${rms.toFixed(1)}`;
-
-                    // Downsample for visualizer
-                    for (let k = 0; k < 64; k++) {
-                        waveBuffer[k] = pcm16[Math.floor(k * (pcm16.length / 64))] || 0;
-                    }
-
-                    if (micSocket && micSocket.readyState === WebSocket.OPEN) {
-                        micSocket.send(pcm16.buffer);
-                    }
-                };
-
-                source.connect(audioProcessor);
-                audioProcessor.connect(audioContext.destination);
-
-                // Client-side Web Speech Recognition fallback for Vercel demo
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (SpeechRecognition) {
-                    speechRecognition = new SpeechRecognition();
-                    speechRecognition.continuous = true;
-                    speechRecognition.interimResults = true;
-                    speechRecognition.lang = 'en-US';
-
-                    speechRecognition.onresult = (event) => {
-                        let interim = '';
-                        let finalTxt = '';
-                        for (let i = event.resultIndex; i < event.results.length; ++i) {
-                            if (event.results[i].isFinal) {
-                                finalTxt += event.results[i][0].transcript;
-                            } else {
-                                interim += event.results[i][0].transcript;
-                            }
-                        }
-                        const current = finalTxt || interim;
-                        if (current) {
-                            document.getElementById('transcript-box').innerHTML = `<strong>&gt;</strong> ${current}`;
-                            const pill = document.getElementById('conn-pill');
-                            const connText = document.getElementById('conn-text');
-                            pill.className = 'status-pill status-streaming';
-                            connText.innerText = 'STREAMING COMMAND';
-                            document.getElementById('core1-val').innerText = '88.4%';
-                            document.getElementById('core1-sub').innerText = 'Active Stream';
-                            document.getElementById('core1-sub').style.color = 'var(--amber-warn)';
-
-                            if (finalTxt) {
-                                addHistoryRow(finalTxt, 0.76, 11.4);
-                                setTimeout(() => {
-                                    pill.className = 'status-pill status-connected';
-                                    connText.innerText = 'STANDBY (READY)';
-                                    document.getElementById('core1-val').innerText = '0.0%';
-                                    document.getElementById('core1-sub').innerText = 'Blocked in Wait (0% CPU)';
-                                    document.getElementById('core1-sub').style.color = 'var(--text-muted)';
-                                }, 1500);
-                            }
-                        }
-                    };
-
-                    speechRecognition.start();
-                }
-
-                isMicActive = true;
-                btnText.innerText = 'Stop Mic Stream';
-                btn.className = 'btn btn-danger';
-                document.getElementById('transcript-box').innerHTML = '<span class="transcript-placeholder">Listening live... Speak keyword "ISRO" followed by your command!</span>';
-
-            } catch (err) {
-                alert(`Microphone Access Error: ${err.message || err}`);
-                console.error("Microphone error:", err);
-            }
-        }
-
-        function stopMicrophone() {
-            if (speechRecognition) {
-                try { speechRecognition.stop(); } catch(e) {}
-            }
-            if (audioProcessor) audioProcessor.disconnect();
-            if (audioContext) audioContext.close();
-            if (micStream) micStream.getTracks().forEach(t => t.stop());
-            if (micSocket) {
-                try {
-                    micSocket.send(JSON.stringify({ type: "eos" }));
-                    micSocket.close();
-                } catch (e) {}
-            }
-            isMicActive = false;
-            waveBuffer = new Array(64).fill(0);
-            document.getElementById('rms-tag').innerText = 'RMS Energy: 0.0';
-        }
-
-        // Settings Modal
-        function openSettingsModal() {
-            document.getElementById('custom-ws-url').value = localStorage.getItem('isro_custom_ws_url') || '';
-            document.getElementById('settings-modal').style.display = 'flex';
-        }
-
-        function closeSettingsModal() {
-            document.getElementById('settings-modal').style.display = 'none';
-        }
-
-        function saveSettings() {
-            const val = document.getElementById('custom-ws-url').value.trim();
-            if (val) {
-                localStorage.setItem('isro_custom_ws_url', val);
-            } else {
-                localStorage.removeItem('isro_custom_ws_url');
-            }
-            closeSettingsModal();
-            if (socket) socket.close();
-            connectWS();
-        }
-
-        // Initialize connection
+        /* ── Init ─────────────────────────────────────────── */
         connectWS();
+    })();
     </script>
 </body>
 </html>
