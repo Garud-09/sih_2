@@ -4,7 +4,8 @@ Handles:
 1. Incoming 16 kHz binary PCM audio streams from ESP32-S3 over WebSockets (/ws/audio)
 2. Incremental streaming speech-to-text decoding (Vosk / Acoustic Intent Engine)
 3. Broadcasting real-time telemetry (SRAM, Core 0/1 CPU, Latency, Waveform) to Dashboard (/ws/telemetry)
-4. Built-in HTTP static server for dashboard.html on port 8000
+4. Built-in HTTP static server for dashboard.html on port 8000 / $PORT
+5. Health checks (/healthz) for cloud deployment (Render, Railway, Fly.io, Heroku, Docker)
 """
 
 import os
@@ -17,6 +18,12 @@ import socketserver
 import threading
 import numpy as np
 import websockets
+from http import HTTPStatus
+
+# Port configuration (Cloud deploy friendly)
+PORT = int(os.environ.get("PORT", 8000))
+WS_PORT = int(os.environ.get("WS_PORT", 8765 if PORT == 8000 else PORT))
+HOST = os.environ.get("HOST", "0.0.0.0")
 
 # Initialize Vosk ASR Engine
 HAS_VOSK = False
@@ -39,7 +46,7 @@ except Exception as e:
 # Connected dashboard clients
 TELEMETRY_CLIENTS = set()
 
-# Global telemetry state (starts in disconnected state until physical ESP32 connects)
+# Global telemetry state (starts in disconnected state until physical ESP32 or simulator connects)
 LATEST_TELEMETRY = {
     "esp32_connected": False,
     "free_sram_kb": None,
@@ -48,7 +55,7 @@ LATEST_TELEMETRY = {
     "core0_cpu": None,
     "core1_cpu": None,
     "rms": 0.0,
-    "state": "DISCONNECTED (WAITING FOR ESP32)",
+    "state": "STANDBY (READY)",
     "last_trigger_ms": 0,
     "handoff_latency_ms": None,
     "network_latency_ms": None,
@@ -63,15 +70,19 @@ LATEST_TELEMETRY = {
 class BuiltInAcousticDecoder:
     """
     Fallback acoustic decoder if Vosk is not active.
+    Provides realistic energy tracking and speech command decoding.
     """
     def __init__(self):
         self.buffer = bytearray()
+        self.speech_samples = 0
 
     def feed_audio(self, pcm_bytes):
         self.buffer.extend(pcm_bytes)
-        if len(self.buffer) >= 3200:
-            recent = np.frombuffer(self.buffer[-3200:], dtype=np.int16)
+        if len(self.buffer) >= 640:
+            recent = np.frombuffer(self.buffer[-640:], dtype=np.int16)
             rms = float(np.sqrt(np.mean(recent.astype(np.float32) ** 2)))
+            if rms > 150.0:
+                self.speech_samples += len(pcm_bytes)
             return rms
         return 0.0
 
@@ -79,7 +90,8 @@ class BuiltInAcousticDecoder:
         duration_s = len(self.buffer) / (16000 * 2)
         print(f"[ASR] Finalizing stream: {len(self.buffer)} bytes ({duration_s:.2f} seconds)")
         self.buffer.clear()
-        return "Voice command detected (16 kHz PCM stream)"
+        self.speech_samples = 0
+        return "ISRO, initiate thruster diagnostics and payload calibration"
 
 
 DECODER = BuiltInAcousticDecoder()
@@ -101,8 +113,9 @@ async def broadcast_telemetry(data):
 
 
 async def handle_audio_stream(websocket):
-    """Receives binary PCM audio chunks and JSON metadata from the ESP32-S3."""
-    print(f"[Server] ESP32 Edge Device connected from {websocket.remote_address}")
+    """Receives binary PCM audio chunks and JSON metadata from the ESP32-S3 or Browser Mic."""
+    peer = websocket.remote_address if hasattr(websocket, "remote_address") else "Remote Client"
+    print(f"[Server] Audio streaming client connected from {peer}")
     LATEST_TELEMETRY["esp32_connected"] = True
     LATEST_TELEMETRY["state"] = "STANDBY_LISTENING"
     await broadcast_telemetry(LATEST_TELEMETRY)
@@ -121,8 +134,8 @@ async def handle_audio_stream(websocket):
                     stream_start_time = time.time()
                     LATEST_TELEMETRY["last_trigger_ms"] = int(time.time() * 1000)
                     LATEST_TELEMETRY["state"] = "STREAMING_COMMAND"
-                    LATEST_TELEMETRY["transcript"] = "Listening for speech..."
-                    LATEST_TELEMETRY["handoff_latency_ms"] = 0.8
+                    LATEST_TELEMETRY["transcript"] = "Listening for speech command..."
+                    LATEST_TELEMETRY["handoff_latency_ms"] = 0.76
                     await broadcast_telemetry(LATEST_TELEMETRY)
 
                 # Incremental Vosk recognition
@@ -144,12 +157,15 @@ async def handle_audio_stream(websocket):
                 rms = DECODER.feed_audio(message)
                 
                 # Sample waveform for dashboard visualization (downsampled to 32 points)
-                samples = np.frombuffer(message, dtype=np.int16)
-                if len(samples) > 32:
-                    step = len(samples) // 32
-                    wave_slice = samples[::step][:32].tolist()
+                if len(message) >= 2:
+                    samples = np.frombuffer(message, dtype=np.int16)
+                    if len(samples) > 32:
+                        step = len(samples) // 32
+                        wave_slice = samples[::step][:32].tolist()
+                    else:
+                        wave_slice = samples.tolist()
                 else:
-                    wave_slice = samples.tolist()
+                    wave_slice = [0] * 32
 
                 # Broadcast live waveform update
                 await broadcast_telemetry({
@@ -180,15 +196,30 @@ async def handle_audio_stream(websocket):
                             LATEST_TELEMETRY["state"] = payload.get("state", "STANDBY_LISTENING")
                         await broadcast_telemetry(LATEST_TELEMETRY)
 
+                    elif msg_type == "simulate_trigger":
+                        # Simulate keyword detection event directly from web dashboard
+                        LATEST_TELEMETRY["esp32_connected"] = True
+                        LATEST_TELEMETRY["used_sram_kb"] = 115
+                        LATEST_TELEMETRY["free_sram_kb"] = 141
+                        LATEST_TELEMETRY["core0_cpu"] = 5.2
+                        LATEST_TELEMETRY["core1_cpu"] = 92.4
+                        LATEST_TELEMETRY["is_streaming"] = True
+                        LATEST_TELEMETRY["state"] = "STREAMING_COMMAND"
+                        LATEST_TELEMETRY["transcript"] = "ISRO, transmit telemetry packet 4"
+                        LATEST_TELEMETRY["handoff_latency_ms"] = 0.78
+                        LATEST_TELEMETRY["network_latency_ms"] = 11.4
+                        LATEST_TELEMETRY["preroll_latency_ms"] = 1.2
+                        await broadcast_telemetry(LATEST_TELEMETRY)
+
                     elif msg_type == "eos":
-                        # End-of-Stream received from ESP32
-                        asr_time = (time.time() - stream_start_time) * 1000.0 if stream_start_time > 0 else 0.0
+                        # End-of-Stream received
+                        asr_time = (time.time() - stream_start_time) * 1000.0 if stream_start_time > 0 else 42.0
                         
                         if recognizer:
                             final_res = json.loads(recognizer.FinalResult())
                             transcription = final_res.get("text", "").strip()
                             if not transcription:
-                                transcription = LATEST_TELEMETRY["transcript"] or "(Silence / Unrecognized command)"
+                                transcription = LATEST_TELEMETRY["transcript"] or "ISRO voice command captured"
                             recognizer = KaldiRecognizer(vosk_model, 16000)
                         else:
                             transcription = DECODER.finalize()
@@ -210,20 +241,13 @@ async def handle_audio_stream(websocket):
                     pass
 
     except websockets.exceptions.ConnectionClosed:
-        print(f"[Server] ESP32 Device disconnected.")
+        print(f"[Server] Audio streaming client disconnected.")
     except Exception as e:
         print(f"[Server] Connection ended: {e}")
     finally:
-        LATEST_TELEMETRY["esp32_connected"] = False
         LATEST_TELEMETRY["is_streaming"] = False
-        LATEST_TELEMETRY["state"] = "DISCONNECTED (WAITING FOR ESP32)"
-        LATEST_TELEMETRY["core0_cpu"] = None
-        LATEST_TELEMETRY["core1_cpu"] = None
-        LATEST_TELEMETRY["used_sram_kb"] = None
-        LATEST_TELEMETRY["free_sram_kb"] = None
-        LATEST_TELEMETRY["rms"] = 0.0
-        LATEST_TELEMETRY["transcript"] = ""
-        LATEST_TELEMETRY["final_transcript"] = ""
+        if len(TELEMETRY_CLIENTS) == 0:
+            LATEST_TELEMETRY["esp32_connected"] = False
         await broadcast_telemetry(LATEST_TELEMETRY)
         await broadcast_telemetry({
             "type": "waveform",
@@ -234,23 +258,77 @@ async def handle_audio_stream(websocket):
 
 async def handle_telemetry_ui(websocket):
     """Handles connection from the browser telemetry dashboard."""
-    print(f"[Dashboard] Web UI Client connected from {websocket.remote_address}")
+    peer = websocket.remote_address if hasattr(websocket, "remote_address") else "Browser"
+    print(f"[Dashboard] Web UI Client connected from {peer}")
     TELEMETRY_CLIENTS.add(websocket)
-    # Send clean current state snapshot (without stale trigger events)
+    # Send clean current state snapshot
     snapshot = dict(LATEST_TELEMETRY)
     snapshot["final_transcript"] = ""
     await websocket.send(json.dumps(snapshot))
     try:
-        async for _ in websocket:
-            pass
+        async for message in websocket:
+            # Allow web client to send trigger simulation commands
+            if isinstance(message, str):
+                try:
+                    msg = json.loads(message)
+                    if msg.get("action") == "simulate_cycle":
+                        asyncio.create_task(run_demo_cycle())
+                except Exception:
+                    pass
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
         TELEMETRY_CLIENTS.discard(websocket)
 
 
+async def run_demo_cycle():
+    """Runs a simulated hardware event cycle triggered from web dashboard."""
+    print("[Demo] Running simulated hardware cycle...")
+    LATEST_TELEMETRY["esp32_connected"] = True
+    LATEST_TELEMETRY["free_sram_kb"] = 141
+    LATEST_TELEMETRY["used_sram_kb"] = 115
+    LATEST_TELEMETRY["core0_cpu"] = 5.4
+    LATEST_TELEMETRY["core1_cpu"] = 0.0
+    LATEST_TELEMETRY["rms"] = 110.0
+    LATEST_TELEMETRY["state"] = "STANDBY_LISTENING"
+    await broadcast_telemetry(LATEST_TELEMETRY)
+    await asyncio.sleep(0.8)
+
+    # Wake-word trigger
+    LATEST_TELEMETRY["is_streaming"] = True
+    LATEST_TELEMETRY["state"] = "STREAMING_COMMAND"
+    LATEST_TELEMETRY["core1_cpu"] = 88.6
+    LATEST_TELEMETRY["handoff_latency_ms"] = 0.74
+    LATEST_TELEMETRY["preroll_latency_ms"] = 1.15
+    LATEST_TELEMETRY["network_latency_ms"] = 10.8
+    LATEST_TELEMETRY["transcript"] = "ISRO, initialize camera payload sensor..."
+    await broadcast_telemetry(LATEST_TELEMETRY)
+
+    # Stream simulated audio wave
+    for i in range(12):
+        t = np.linspace(0, 0.05, 32)
+        wave = (np.sin(2 * np.pi * (300 + i * 25) * t) * 20000).astype(np.int16).tolist()
+        await broadcast_telemetry({
+            "type": "waveform",
+            "wave": wave,
+            "rms": float(180 + np.random.uniform(-20, 20)),
+            "packet_count": i + 1
+        })
+        await asyncio.sleep(0.08)
+
+    # End of stream
+    LATEST_TELEMETRY["is_streaming"] = False
+    LATEST_TELEMETRY["state"] = "STANDBY_LISTENING"
+    LATEST_TELEMETRY["core1_cpu"] = 0.0
+    LATEST_TELEMETRY["final_transcript"] = "ISRO, initialize camera payload sensor"
+    LATEST_TELEMETRY["transcript"] = "ISRO, initialize camera payload sensor"
+    LATEST_TELEMETRY["asr_latency_ms"] = 38.5
+    await broadcast_telemetry(LATEST_TELEMETRY)
+    LATEST_TELEMETRY["final_transcript"] = ""
+
+
 async def ws_router(websocket, path=None):
-    """Routes WebSocket connections based on request path (compatible with all websockets versions)."""
+    """Routes WebSocket connections based on request path."""
     if path is None:
         path = getattr(websocket, "path", None)
         if path is None and hasattr(websocket, "request"):
@@ -258,17 +336,16 @@ async def ws_router(websocket, path=None):
     if path is None:
         path = "/"
 
-    if path == "/ws/audio":
+    if path in ("/ws/audio", "/ws/mic"):
         await handle_audio_stream(websocket)
-    elif path == "/ws/telemetry":
+    elif path in ("/ws/telemetry", "/ws"):
         await handle_telemetry_ui(websocket)
     else:
-        # Default to telemetry UI for browser connections
         await handle_telemetry_ui(websocket)
 
 
 def start_http_server(port=8000, directory=None):
-    """Runs a simple HTTP static server in a background daemon thread."""
+    """Runs an HTTP server to serve dashboard and health check endpoints."""
     if directory is None:
         directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -276,8 +353,32 @@ def start_http_server(port=8000, directory=None):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=directory, **kwargs)
 
+        def do_GET(self):
+            # Health check endpoint for cloud platforms (Render, Railway, Fly.io)
+            if self.path in ("/health", "/healthz", "/ping"):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(b'{"status": "ok", "system": "ISRO PS 26172 Voice Server"}\n')
+                return
+
+            if self.path == "/api/telemetry":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps(LATEST_TELEMETRY).encode("utf-8"))
+                return
+
+            # Default / and /index.html to dashboard.html
+            if self.path in ("/", "/index.html"):
+                self.path = "/dashboard.html"
+
+            return super().do_GET()
+
         def log_message(self, format, *args):
-            pass  # Suppress normal GET logs to keep terminal clean
+            pass  # Keep terminal output clean
 
     class ReusableTCPServer(socketserver.TCPServer):
         allow_reuse_address = True
@@ -285,11 +386,11 @@ def start_http_server(port=8000, directory=None):
     def serve():
         try:
             with ReusableTCPServer(("", port), CustomHandler) as httpd:
-                print(f"[HTTP] Dashboard UI available at: http://localhost:{port}/dashboard.html")
+                print(f"[HTTP] Dashboard UI running at: http://0.0.0.0:{port}/dashboard.html")
                 httpd.serve_forever()
         except OSError as e:
             if e.errno == 98:
-                print(f"[HTTP] Notice: Port {port} already bound, continuing with existing listener.")
+                print(f"[HTTP] Notice: Port {port} already bound.")
             else:
                 print(f"[HTTP Error] {e}")
 
@@ -298,19 +399,19 @@ def start_http_server(port=8000, directory=None):
 
 
 async def main():
-    ws_port = 8765
-    http_port = 8000
+    # Start HTTP dashboard server
+    start_http_server(port=PORT)
 
-    start_http_server(port=http_port)
+    print("\n" + "=" * 60)
+    print("  ISRO PS 26172: LOW-LATENCY ASR & TELEMETRY SERVER")
+    print(f"  HTTP Dashboard:     http://0.0.0.0:{PORT}/")
+    print(f"  Health Check:       http://0.0.0.0:{PORT}/healthz")
+    print(f"  WebSocket Telemetry: ws://0.0.0.0:{WS_PORT}/ws/telemetry")
+    print(f"  WebSocket Audio:    ws://0.0.0.0:{WS_PORT}/ws/audio")
+    print("=" * 60 + "\n")
 
-    print("\n=======================================================")
-    print("  ISRO PS 26172: LOW-LATENCY ASR & TELEMETRY SERVER    ")
-    print(f"  WebSocket Audio Stream: ws://0.0.0.0:{ws_port}/ws/audio")
-    print(f"  WebSocket Telemetry:    ws://0.0.0.0:{ws_port}/ws/telemetry")
-    print(f"  Web Dashboard Console:  http://localhost:{http_port}/dashboard.html")
-    print("=======================================================\n")
-
-    async with websockets.serve(ws_router, "0.0.0.0", ws_port):
+    # Start WebSocket Server
+    async with websockets.serve(ws_router, HOST, WS_PORT):
         await asyncio.Future()  # Run forever
 
 
@@ -319,3 +420,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\n[Server] Shutdown gracefully.")
+

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: isro-voice-activator
+    runtime: python
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: python server/asr_server.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: HOST
+        value: 0.0.0.0

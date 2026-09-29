@@ -37,17 +37,18 @@ void acousticSentinelTask(void* pvParameters) {
     static int16_t inference_window[PRE_ROLL_SAMPLES];
 
     uint32_t silence_duration_ms = 0;
-static uint32_t stream_start_time = 0;
-const uint32_t frame_duration_ms = (DMA_BUFFER_SAMPLES * 1000) / AUDIO_SAMPLE_RATE; // 16ms
+    static uint32_t stream_start_time = 0;
+    const uint32_t frame_duration_ms = (DMA_BUFFER_SAMPLES * 1000) / AUDIO_SAMPLE_RATE; // 16ms
 
     while (true) {
-        uint32_t tick_start = esp_timer_get_time();
-
         // 1. Hardware DMA Ingestion (Zero-copy background transfer)
         size_t samples_read = AudioDMA::readRawDMA(raw_dma_buf, DMA_BUFFER_SAMPLES, portMAX_DELAY);
         if (samples_read == 0) {
             continue;
         }
+
+        // Start measuring CPU active time AFTER DMA blocking wait completes
+        uint32_t tick_start = esp_timer_get_time();
 
         // 2. Signal Conditioning: >> 14 and soft limiter clamping
         AudioDMA::conditionAudio(raw_dma_buf, pcm_frame, samples_read);
@@ -59,47 +60,40 @@ const uint32_t frame_duration_ms = (DMA_BUFFER_SAMPLES * 1000) / AUDIO_SAMPLE_RA
         float current_rms = 0.0f;
         bool speech_detected = VADGate::isVoiceActive(pcm_frame, samples_read, &current_rms);
 
-        // Place the print statement AFTER current_rms and speech_detected are declared:
-          Serial.printf("[VAD] Current RMS: %.2f | Active: %s\n", current_rms, speech_detected ? "YES" : "NO");
+        Serial.printf("[VAD] Current RMS: %.2f | Active: %s\n", current_rms, speech_detected ? "YES" : "NO");
 
-       if (s_is_streaming) {
-        if (stream_start_time == 0) stream_start_time = millis();
+        if (s_is_streaming) {
+            if (stream_start_time == 0) stream_start_time = millis();
 
-        // Live command streaming mode: transfer live PCM frame to Core 1
-        memcpy(s_live_frame_transfer, pcm_frame, sizeof(pcm_frame));
-        xTaskNotify(s_streamer_task_handle, NOTIFY_STREAM_CHUNK, eSetBits);
+            // Live command streaming mode: transfer live PCM frame to Core 1
+            memcpy(s_live_frame_transfer, pcm_frame, sizeof(pcm_frame));
+            xTaskNotify(s_streamer_task_handle, NOTIFY_STREAM_CHUNK, eSetBits);
 
-        if (!speech_detected || (millis() - stream_start_time > 5000)) {
-            silence_duration_ms += frame_duration_ms;
-            if (silence_duration_ms >= SILENCE_TIMEOUT_MS || (millis() - stream_start_time > 5000)) {
-                Serial.println("[Core 0] Sustained silence or timeout detected. Terminating stream.");
-                s_is_streaming = false;
+            if (!speech_detected || (millis() - stream_start_time > 5000)) {
+                silence_duration_ms += frame_duration_ms;
+                if (silence_duration_ms >= SILENCE_TIMEOUT_MS || (millis() - stream_start_time > 5000)) {
+                    Serial.println("[Core 0] Sustained silence or timeout detected. Terminating stream.");
+                    s_is_streaming = false;
+                    silence_duration_ms = 0;
+                    stream_start_time = 0;
+                    xTaskNotify(s_streamer_task_handle, NOTIFY_TRIGGER_STOP, eSetBits);
+                }
+            } else {
                 silence_duration_ms = 0;
-                stream_start_time = 0;
-                xTaskNotify(s_streamer_task_handle, NOTIFY_TRIGGER_STOP, eSetBits);
             }
-            else {
-            silence_duration_ms = 0;
-        }
-    }
-} else {
-    // Standby listening mode: only evaluate neural net if acoustic energy is present
-    if (speech_detected) {
-        silence_duration_ms = 0;
+        } else {
             // Standby listening mode: only evaluate neural net if acoustic energy is present
             if (speech_detected) {
                 silence_duration_ms = 0;
-                
+
                 // Extract historical 1.0s window for feature extraction & inference
                 uint32_t snapshot_head = AudioDMA::freezeSnapshot();
                 AudioDMA::copyHistoricalSnapshot(snapshot_head, inference_window);
 
                 // Run INT8 TFLite Micro inference
                 float confidence = TFLiteKWS::runInference(inference_window);
-                
-                // Add this line right here:
-                Serial.printf("[KWS] Inference confidence: %.2f%%\n", confidence * 100.0f);
 
+                Serial.printf("[KWS] Inference confidence: %.2f%%\n", confidence * 100.0f);
 
                 if (confidence >= KWS_CONFIDENCE_THRESHOLD) {
                     Serial.printf("\n[Core 0] *** WAKE WORD DETECTED! *** Keyword: 'ISRO' (Confidence: %.2f%%)\n",
@@ -117,13 +111,13 @@ const uint32_t frame_duration_ms = (DMA_BUFFER_SAMPLES * 1000) / AUDIO_SAMPLE_RA
             }
         }
 
-        // Telemetry compute tracking
+        // Telemetry compute tracking — runs every iteration regardless of mode
         uint32_t tick_elapsed = esp_timer_get_time() - tick_start;
         s_core0_active_ticks += tick_elapsed;
         s_core0_total_ticks += (frame_duration_ms * 1000);
     }
 }
-}
+
 // =====================================================================================
 // CORE 1: NETWORK & SOCKET STREAMER TASK (Priority 1)
 // =====================================================================================
