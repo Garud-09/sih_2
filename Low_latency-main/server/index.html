@@ -772,17 +772,17 @@
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
             
-            // If running on Vercel without custom backend URL, run in standalone client demo mode
+            // If running on Vercel, connect to the deployed Render backend
             if (window.location.hostname.includes('vercel.app')) {
-                return null;
+                return 'wss://sih-2-qlj9.onrender.com/ws/telemetry';
             }
 
             if (!host || window.location.protocol === 'file:') {
-                return 'ws://localhost:8765/ws/telemetry';
+                return 'wss://sih-2-qlj9.onrender.com/ws/telemetry';
             }
 
             if (window.location.port === '8000') {
-                return `${wsProtocol}//${window.location.hostname}:8765/ws/telemetry`;
+                return `${wsProtocol}//${window.location.hostname}:8000/ws/telemetry`;
             }
 
             return `${wsProtocol}//${host}/ws/telemetry`;
